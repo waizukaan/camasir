@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Çamaşır Takip</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#1d2330;--muted:#6b7385;--line:#e2e5eb;--accent:#2f6fde;--accent-ink:#fff;
+--ok:#1f9d55;--warn:#b87400;--bad:#d14343;--okbg:#e5f5eb;--warnbg:#fff3d6;--badbg:#fde6e6}
+@media (prefers-color-scheme:dark){:root{--bg:#13161c;--card:#1c2028;--text:#e7eaf0;--muted:#99a2b4;--line:#2c323d;
+--okbg:#153020;--warnbg:#3a2d10;--badbg:#3d1a1a;--warn:#f0b13a;--bad:#ff7b7b;--ok:#4cc77f}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);font-size:15px}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0}
+.who{margin-right:auto;font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.dot.on{background:var(--ok)}.dot.off{background:var(--bad)}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{border:1px solid var(--line);background:transparent;color:var(--text);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.card h2{font-size:16px;margin:0 0 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h2 .sp{margin-left:auto}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.stat b{display:block;font-size:26px}
+.stat span{color:var(--muted);font-size:13px}
+.stat.bad b{color:var(--bad)}.stat.warn b{color:var(--warn)}.stat.ok b{color:var(--ok)}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.tbl{overflow-x:auto}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+.b-bad{background:var(--badbg);color:var(--bad)}.b-warn{background:var(--warnbg);color:var(--warn)}.b-ok{background:var(--okbg);color:var(--ok)}
+button.btn,label.btn{border:1px solid var(--line);background:var(--card);color:var(--text);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit;font-size:14px;display:inline-block}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--bad)}
+button.small{padding:4px 9px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+input,textarea,select{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+textarea{width:100%;min-height:200px;resize:vertical}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.muted{color:var(--muted);font-size:13px}
+.empty{color:var(--muted);padding:10px 0}
+.msg{padding:10px 12px;border-radius:8px;margin:10px 0;font-size:14px}
+.msg.ok{background:var(--okbg);color:var(--ok)}.msg.err{background:var(--badbg);color:var(--bad)}.msg.warn{background:var(--warnbg);color:var(--warn)}
+.hidden{display:none !important}
+select.pick{max-width:240px}
+tr.unmatched td{background:var(--badbg)}
+tr.fuzzy td{background:var(--warnbg)}
+.overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;z-index:20}
+.loginbox{width:100%;max-width:360px}
+.loginbox label{display:block;margin:10px 0;font-size:14px}
+.loginbox input{width:100%;margin-top:4px}
+.loginbox button{width:100%;margin-top:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧺 Çamaşır Takip</h1>
+  <span class="who"><span class="dot" id="connDot"></span><span id="connTxt">Bağlanıyor…</span></span>
+  <nav>
+    <button data-tab="panel" class="active">Panel</button>
+    <button data-tab="batch">Toplu Güncelle</button>
+    <button data-tab="list">Tüm Liste</button>
+    <button data-tab="data">Veri & Ayarlar</button>
+  </nav>
+</header>
+
+<main>
+<!-- PANEL -->
+<section id="tab-panel">
+  <div class="stats">
+    <div class="stat"><b id="sTotal">0</b><span>Toplam kişi</span></div>
+    <div class="stat bad"><b id="sBad">0</b><span>Gecikmiş</span></div>
+    <div class="stat warn"><b id="sWarn">0</b><span>Yaklaşan</span></div>
+    <div class="stat ok"><b id="sOk">0</b><span>Sorunsuz</span></div>
+  </div>
+  <div class="card">
+    <h2>🔴 Süresi dolanlar <span class="muted" id="badHint"></span><span class="sp"></span><button class="btn small" data-copy="bad">İsimleri kopyala</button></h2>
+    <div id="badList"></div>
+  </div>
+  <div class="card">
+    <h2>🟠 Yaklaşanlar <span class="muted" id="warnHint"></span><span class="sp"></span><button class="btn small" data-copy="warn">İsimleri kopyala</button></h2>
+    <div id="warnList"></div>
+  </div>
+</section>
+
+<!-- BATCH -->
+<section id="tab-batch" class="hidden">
+  <div class="card">
+    <h2>Toplu güncelleme</h2>
+    <p class="muted">Çamaşır teslim edenlerin listesini yapıştırın (her satıra bir isim). Numara, madde işareti vs. otomatik temizlenir. İsimler büyük/küçük harf ve Türkçe karakter farkı gözetmeden eşleştirilir.</p>
+    <div class="row"><label>Teslim tarihi: <input type="date" id="batchDate"></label></div>
+    <textarea id="batchText" placeholder="Ahmet Yılmaz&#10;Ayşe Demir&#10;..."></textarea>
+    <div class="row"><button class="btn primary" id="batchPreview">Önizle</button><button class="btn" id="batchClear">Temizle</button></div>
+    <div id="batchResult"></div>
+  </div>
+  <div class="card">
+    <h2>Son işlemler</h2>
+    <div id="historyList"></div>
+  </div>
+</section>
+
+<!-- LIST -->
+<section id="tab-list" class="hidden">
+  <div class="card">
+    <h2>Tüm liste <span class="muted" id="listCount"></span></h2>
+    <div class="row">
+      <input id="search" placeholder="İsim ara..." style="flex:1;min-width:160px">
+      <select id="sortSel"><option value="days">En uzun süre önce verenler</option><option value="name">İsme göre</option></select>
+    </div>
+    <div class="tbl"><table><thead><tr><th>İsim</th><th>Son teslim</th><th>Geçen gün</th><th></th></tr></thead><tbody id="listBody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>Kişi ekle</h2>
+    <div class="row">
+      <input id="addName" placeholder="Ad Soyad" style="flex:1;min-width:160px">
+      <input type="date" id="addDate">
+      <button class="btn primary" id="addBtn">Ekle</button>
+    </div>
+    <div id="addMsg"></div>
+  </div>
+</section>
+
+<!-- DATA -->
+<section id="tab-data" class="hidden">
+  <div class="card hidden" id="migrateCard">
+    <h2>Bu cihazdaki eski veriler</h2>
+    <p class="muted">Bu tarayıcıda, buluta geçmeden önce girilmiş <b id="migrateCount"></b> kişilik bir liste var. Buluta aktarılırsa aynı isimlerin tarihi güncellenir, yeniler eklenir.</p>
+    <div class="row"><button class="btn primary" id="migrateBtn">Buluta aktar</button><button class="btn" id="migrateDismiss">Yoksay ve sil</button></div>
+    <div id="migrateMsg"></div>
+  </div>
+  <div class="card">
+    <h2>İlk veri girişi / toplu içe aktarma</h2>
+    <p class="muted">Her satıra <b>İsim ve tarih</b> yazın. Excel'den iki sütunu kopyalayıp yapıştırabilirsiniz. Tarih biçimi: <code>03.11.2026</code>, <code>3/11/2026</code> veya <code>2026-11-03</code>. Listede zaten olan isimlerin tarihi güncellenir, yeni isimler eklenir.</p>
+    <textarea id="importText" placeholder="Ahmet Yılmaz	02.11.2026&#10;Ayşe Demir, 30.10.2026&#10;Mehmet Kaya; 2026-11-04"></textarea>
+    <div class="row">
+      <label><input type="checkbox" id="importReplace"> Mevcut listeyi tamamen sil ve bununla değiştir</label>
+    </div>
+    <div class="row"><button class="btn primary" id="importBtn">İçe aktar</button></div>
+    <div id="importMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Ayarlar <span class="muted">(herkes için geçerli)</span></h2>
+    <div class="row"><label>Süresi dolmuş sayılsın: <input type="number" id="setLimit" min="1" max="60" style="width:70px"> gün ve üzeri</label></div>
+    <div class="row"><label>Yaklaşıyor uyarısı: <input type="number" id="setWarn" min="0" max="60" style="width:70px"> gün ve üzeri</label></div>
+    <div class="row"><button class="btn primary" id="saveSettings">Kaydet</button></div>
+    <div id="setMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Yedekleme</h2>
+    <p class="muted">Veriler bulutta saklanıyor. Yine de ara ara yedek almak iyi olur.</p>
+    <div class="row">
+      <button class="btn" id="exportJson">Yedek indir (.json)</button>
+      <label class="btn">Yedekten yükle<input type="file" id="importJson" accept=".json,application/json" hidden></label>
+      <button class="btn" id="exportCsv">Excel için indir (.csv)</button>
+      <button class="btn danger" id="wipeAll">Tüm verileri sil</button>
+    </div>
+    <div id="backupMsg"></div>
+  </div>
+</section>
+</main>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getFirestore, collection, doc, onSnapshot, writeBatch, setDoc, query, orderBy, limit, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+/* ================= AYARLAR — Firebase konsolundan kopyalayın ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCFJX58TQI9tsXy7x2RRIk16FZoRT4Sg2Q",
+  authDomain: "camasirtakip.firebaseapp.com",
+  projectId: "camasirtakip",
+  storageBucket: "camasirtakip.firebasestorage.app",
+  messagingSenderId: "600580897562",
+  appId: "1:600580897562:web:03bc91b335246c13a28aa3"
+};
+/* ============================================================================ */
+
+const $ = id => document.getElementById(id);
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let S = {people:[], settings:{limit:7,warn:5}, history:[]};
+let unsubs = [];
+
+/* ---------- yardımcılar ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayISO = () => iso(new Date());
+const fmt = s => { if(!s) return '—'; const [y,m,d]=s.split('-'); return `${d}.${m}.${y}`; };
+function daysSince(s){
+  if(!s) return Infinity;
+  const [y,m,d] = s.split('-').map(Number);
+  const a = new Date(y,m-1,d,12), t = new Date();
+  const b = new Date(t.getFullYear(),t.getMonth(),t.getDate(),12);
+  return Math.round((b-a)/864e5);
+}
+function mk(y,mo,d){
+  const dt = new Date(y,mo-1,d);
+  if(dt.getFullYear()!==y || dt.getMonth()!==mo-1 || dt.getDate()!==d) return null;
+  return iso(dt);
+}
+function parseDate(str){
+  str = String(str).trim(); let m;
+  if((m = str.match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/))) return mk(+m[1],+m[2],+m[3]);
+  if((m = str.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/))){ let y=+m[3]; if(y<100) y+=2000; return mk(y,+m[2],+m[1]); }
+  return null;
+}
+const TRMAP = {ç:'c',ğ:'g',ı:'i',ö:'o',ş:'s',ü:'u',â:'a',î:'i',û:'u'};
+function norm(s){
+  return String(s).toLocaleLowerCase('tr').normalize('NFC')
+    .replace(/[çğıöşüâîû]/g, c => TRMAP[c])
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+}
+const cleanLine = l => l.replace(/^\s*(\d+[.)\-:]?|[-*•·–])\s+/,'').trim();
+function status(p){
+  const d = daysSince(p.last);
+  if(d >= S.settings.limit) return 'bad';
+  if(d >= S.settings.warn) return 'warn';
+  return 'ok';
+}
+function dayBadge(p){
+  const d = daysSince(p.last), st = status(p);
+  const txt = d===Infinity ? 'tarih yok' : d===0 ? 'bugün' : `${d} gün`;
+  return `<span class="badge b-${st}">${txt}</span>`;
+}
+const byName = (a,b) => a.name.localeCompare(b.name,'tr');
+const byDays = (a,b) => (daysSince(b.last)-daysSince(a.last)) || byName(a,b);
+const getP = id => S.people.find(p => p.id===id);
+function msg(el, type, text){ $(el).innerHTML = text ? `<div class="msg ${type}">${text}</div>` : ''; }
+
+/* ---------- veritabanı ---------- */
+const pRef = id => doc(db,'people',id);
+const newPRef = () => doc(collection(db,'people'));
+const histOp = (label, date, changes) => ({type:'set', ref:doc(collection(db,'history')),
+  data:{at:Date.now(), label, date, changes}});
+
+async function run(ops){
+  try{
+    for(let i=0;i<ops.length;i+=450){
+      const b = writeBatch(db);
+      for(const o of ops.slice(i,i+450)){
+        if(o.type==='delete') b.delete(o.ref);
+        else if(o.type==='update') b.update(o.ref, o.data);
+        else b.set(o.ref, o.data);
+      }
+      await b.commit();
+    }
+    return true;
+  }catch(e){
+    console.error(e);
+    alert('Kaydedilemedi: ' + (e.code==='permission-denied' ? 'yetki yok (Firestore kuralları açık mı?).' : e.message));
+    return false;
+  }
+}
+async function deleteAllOps(){
+  const [ps, hs] = await Promise.all([getDocs(collection(db,'people')), getDocs(collection(db,'history'))]);
+  return [...ps.docs, ...hs.docs].map(d => ({type:'delete', ref:d.ref}));
+}
+
+function subscribe(){
+  unsubs.forEach(u => u()); unsubs = [];
+  const onErr = e => { console.error(e); setConn(false, 'Hata: ' + e.code); };
+  unsubs.push(onSnapshot(collection(db,'people'), {includeMetadataChanges:true}, snap => {
+    S.people = snap.docs.map(d => ({id:d.id, ...d.data()}));
+    setConn(!snap.metadata.fromCache);
+    renderAll();
+  }, onErr));
+  unsubs.push(onSnapshot(doc(db,'meta','settings'), snap => {
+    if(snap.exists()) S.settings = Object.assign({limit:7,warn:5}, snap.data());
+    renderSettings(); renderAll();
+  }, onErr));
+  unsubs.push(onSnapshot(query(collection(db,'history'), orderBy('at','desc'), limit(30)), snap => {
+    S.history = snap.docs.map(d => ({id:d.id, ...d.data()}));
+    renderHistory();
+  }, onErr));
+}
+function setConn(online, txt){
+  $('connDot').className = 'dot ' + (online ? 'on' : 'off');
+  $('connTxt').textContent = txt || (online ? 'Canlı' : 'Bağlantı yok — değişiklikler bağlanınca gönderilir');
+}
+
+
+/* ---------- sekmeler ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x===b));
+  document.querySelectorAll('main > section').forEach(s => s.classList.toggle('hidden', s.id !== 'tab-'+b.dataset.tab));
+});
+
+/* ---------- panel ---------- */
+function personRows(list){
+  if(!list.length) return '<div class="empty">Kimse yok 👍</div>';
+  return `<div class="tbl"><table><thead><tr><th>İsim</th><th>Son teslim</th><th>Geçen</th><th></th></tr></thead><tbody>${
+    list.map(p => `<tr><td>${esc(p.name)}</td><td>${fmt(p.last)}</td><td>${dayBadge(p)}</td>
+      <td style="text-align:right"><button class="btn small" data-today="${p.id}">Bugün verdi</button></td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+function renderPanel(){
+  const bad = S.people.filter(p => status(p)==='bad').sort(byDays);
+  const warn = S.people.filter(p => status(p)==='warn').sort(byDays);
+  $('sTotal').textContent = S.people.length;
+  $('sBad').textContent = bad.length;
+  $('sWarn').textContent = warn.length;
+  $('sOk').textContent = S.people.length - bad.length - warn.length;
+  $('badHint').textContent = `(${S.settings.limit}+ gün)`;
+  $('warnHint').textContent = `(${S.settings.warn}–${S.settings.limit-1} gün)`;
+  $('badList').innerHTML = S.people.length ? personRows(bad) : '<div class="empty">Henüz veri yok. “Veri & Ayarlar” sekmesinden listeyi girin.</div>';
+  $('warnList').innerHTML = personRows(warn);
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-today]');
+  if(t){
+    const p = getP(t.dataset.today); if(!p) return;
+    const d = todayISO(); t.disabled = true;
+    run([{type:'update', ref:pRef(p.id), data:{last:d}}, histOp(`${p.name} — tek kişi`, d, [{id:p.id, prev:p.last??null}])]);
+  }
+  const c = e.target.closest('[data-copy]');
+  if(c){
+    const list = S.people.filter(p => status(p)===c.dataset.copy).sort(byDays);
+    const text = list.map(p => `${p.name} (${daysSince(p.last)===Infinity?'tarih yok':daysSince(p.last)+' gün'})`).join('\n');
+    navigator.clipboard?.writeText(text).then(() => { c.textContent='Kopyalandı ✓'; setTimeout(()=>c.textContent='İsimleri kopyala',1500); },
+      () => alert(text));
+  }
+});
+
+/* ---------- toplu güncelleme ---------- */
+$('batchDate').value = todayISO();
+$('addDate').value = todayISO();
+
+function findMatch(raw){
+  const n = norm(raw); if(!n) return {type:'none'};
+  const exact = S.people.filter(p => norm(p.name)===n);
+  if(exact.length===1) return {type:'exact', id:exact[0].id};
+  const toks = n.split(' ');
+  const cands = S.people.filter(p => {
+    const pt = norm(p.name).split(' ');
+    return toks.every(t => pt.some(x => x.startsWith(t)));
+  });
+  if(cands.length===1) return {type:'fuzzy', id:cands[0].id};
+  if(cands.length>1) return {type:'ambiguous'};
+  return {type:'none'};
+}
+$('batchPreview').onclick = () => {
+  const date = $('batchDate').value;
+  if(!date){ msg('batchResult','err','Tarih seçin.'); return; }
+  const lines = $('batchText').value.split(/\r?\n/).map(cleanLine).filter(Boolean);
+  if(!lines.length){ msg('batchResult','err','Liste boş.'); return; }
+  if(!S.people.length){ msg('batchResult','err','Önce kişi listesini girin (Veri & Ayarlar).'); return; }
+  const pending = lines.map(l => ({raw:l, ...findMatch(l)}));
+  const opts = S.people.slice().sort(byName).map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const lbl = {exact:'✓ tam eşleşme', fuzzy:'≈ tahmini eşleşme, kontrol edin', ambiguous:'⚠ birden fazla aday, seçin', none:'✗ bulunamadı, seçin veya atlayın'};
+  const nBad = pending.filter(x => x.type==='ambiguous'||x.type==='none').length;
+  const nFuzzy = pending.filter(x => x.type==='fuzzy').length;
+  $('batchResult').innerHTML = `
+    ${nBad ? `<div class="msg err">${nBad} satır eşleşmedi — elle seçin ya da boş bırakın (atlanır).</div>` : ''}
+    ${nFuzzy ? `<div class="msg warn">${nFuzzy} satır tahmini eşleşti — doğru kişi mi kontrol edin.</div>` : ''}
+    <div class="tbl"><table><thead><tr><th>Girilen</th><th>Eşleşen kişi</th><th>Durum</th></tr></thead><tbody>
+    ${pending.map((x,i) => `<tr class="${x.type==='fuzzy'?'fuzzy':(x.type==='exact'?'':'unmatched')}">
+      <td>${esc(x.raw)}</td>
+      <td><select class="pick" data-i="${i}"><option value="">— atla —</option>${opts}</select></td>
+      <td class="muted">${lbl[x.type]}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div id="dupWarn"></div>
+    <div class="row"><button class="btn primary" id="batchApply">${fmt(date)} tarihiyle güncelle</button></div>`;
+  document.querySelectorAll('select.pick').forEach(s => { s.value = pending[+s.dataset.i].id || ''; s.onchange = checkDup; });
+  checkDup();
+  $('batchApply').onclick = () => applyBatch(date);
+};
+function checkDup(){
+  const ids = [...document.querySelectorAll('select.pick')].map(s => s.value).filter(Boolean);
+  const dups = [...new Set(ids.filter((v,i) => ids.indexOf(v)!==i))].map(id => getP(id)?.name);
+  msg('dupWarn','warn', dups.length ? `Aynı kişi birden fazla satırda seçili: ${dups.map(esc).join(', ')}` : '');
+}
+async function applyBatch(date){
+  const ids = [...new Set([...document.querySelectorAll('select.pick')].map(s => s.value).filter(Boolean))].filter(getP);
+  if(!ids.length){ msg('batchResult','err','Güncellenecek kimse seçilmedi.'); return; }
+  $('batchApply').disabled = true;
+  const changes = ids.map(id => ({id, prev:getP(id).last ?? null}));
+  const ok = await run([...ids.map(id => ({type:'update', ref:pRef(id), data:{last:date}})),
+    histOp(`Toplu güncelleme — ${ids.length} kişi`, date, changes)]);
+  if(ok){ $('batchText').value = ''; msg('batchResult','ok', `${ids.length} kişinin teslim tarihi ${fmt(date)} olarak güncellendi.`); }
+  else $('batchApply').disabled = false;
+}
+$('batchClear').onclick = () => { $('batchText').value=''; $('batchResult').innerHTML=''; };
+
+function renderHistory(){
+  if(!S.history.length){ $('historyList').innerHTML = '<div class="empty">Henüz işlem yok.</div>'; return; }
+  $('historyList').innerHTML = `<div class="tbl"><table><tbody>${S.history.map((h,i) => {
+    const names = (h.changes||[]).map(c => getP(c.id)?.name).filter(Boolean);
+    return `<tr><td><b>${esc(h.label)}</b><div class="muted">Tarih: ${fmt(h.date)} · İşlem: ${new Date(h.at).toLocaleString('tr-TR')}</div>
+      <details><summary class="muted">Kişiler</summary><div class="muted">${names.map(esc).join(', ')}</div></details></td>
+      <td style="text-align:right">${i===0 ? `<button class="btn small danger" id="undoBtn">Geri al</button>` : ''}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  const u = $('undoBtn');
+  if(u) u.onclick = async () => {
+    const h = S.history[0];
+    if(!confirm(`“${h.label}” geri alınsın mı?`)) return;
+    let skipped = 0; const ops = [];
+    for(const c of h.changes||[]){
+      const p = getP(c.id); if(!p) continue;
+      if(p.last !== h.date){ skipped++; continue; }   // sonradan başkası değiştirmişse dokunma
+      ops.push({type:'update', ref:pRef(c.id), data:{last:c.prev ?? null}});
+    }
+    ops.push({type:'delete', ref:doc(db,'history',h.id)});
+    if(await run(ops) && skipped) alert(`${skipped} kişi bu işlemden sonra tekrar güncellendiği için geri alınmadı.`);
+  };
+}
+
+/* ---------- tüm liste ---------- */
+function renderList(){
+  const q = norm($('search').value);
+  const list = S.people.filter(p => !q || norm(p.name).includes(q)).sort($('sortSel').value==='name' ? byName : byDays);
+  $('listCount').textContent = `(${S.people.length} kişi)`;
+  if(document.activeElement && document.activeElement.dataset && document.activeElement.dataset.date) return; // tarih seçilirken yeniden çizme
+  $('listBody').innerHTML = list.length ? list.map(p => `<tr>
+    <td>${esc(p.name)}</td>
+    <td><input type="date" value="${p.last||''}" data-date="${p.id}"></td>
+    <td>${dayBadge(p)}</td>
+    <td style="text-align:right;white-space:nowrap"><button class="btn small" data-rename="${p.id}">Adı düzenle</button>
+      <button class="btn small danger" data-del="${p.id}">Sil</button></td></tr>`).join('')
+    : `<tr><td colspan="4" class="empty">Kayıt yok.</td></tr>`;
+}
+$('search').oninput = renderList;
+$('sortSel').onchange = renderList;
+$('listBody').addEventListener('change', e => {
+  const id = e.target.dataset.date; if(!id) return;
+  const p = getP(id); if(!p) return;
+  const v = e.target.value || null;
+  e.target.blur();
+  run([{type:'update', ref:pRef(id), data:{last:v}}, histOp(`${p.name} — tarih düzeltme`, v, [{id, prev:p.last??null}])]);
+});
+$('listBody').addEventListener('click', e => {
+  const del = e.target.dataset.del, ren = e.target.dataset.rename;
+  if(del){ const p = getP(del); if(p && confirm(`${p.name} silinsin mi?`)) run([{type:'delete', ref:pRef(del)}]); }
+  if(ren){ const p = getP(ren); const n = p && prompt('Yeni isim:', p.name); if(n && n.trim()) run([{type:'update', ref:pRef(ren), data:{name:n.trim()}}]); }
+});
+$('addBtn').onclick = async () => {
+  const name = $('addName').value.trim(), date = $('addDate').value;
+  if(!name){ msg('addMsg','err','İsim girin.'); return; }
+  if(S.people.some(p => norm(p.name)===norm(name))){ msg('addMsg','err','Bu isim zaten listede.'); return; }
+  if(await run([{type:'set', ref:newPRef(), data:{name, last:date||null}}])){ $('addName').value=''; msg('addMsg','ok',`${esc(name)} eklendi.`); }
+};
+
+/* ---------- içe aktarma ---------- */
+function upsertOps(rows){   // rows: [{name, last}]
+  const ops = []; let added=0, updated=0; const seen = new Map();
+  for(const x of rows){
+    const k = norm(x.name);
+    const ex = S.people.find(p => norm(p.name)===k) || seen.get(k);
+    if(ex){ if(x.last){ ops.push({type:'update', ref:pRef(ex.id), data:{last:x.last}}); updated++; } }
+    else { const ref = newPRef(); seen.set(k, {id:ref.id}); ops.push({type:'set', ref, data:{name:x.name, last:x.last||null}}); added++; }
+  }
+  return {ops, added, updated};
+}
+$('importBtn').onclick = async () => {
+  const lines = $('importText').value.split(/\r?\n/).map(cleanLine).filter(Boolean);
+  if(!lines.length){ msg('importMsg','err','Metin boş.'); return; }
+  const rows = [], bad = [];
+  for(const l of lines){
+    const m = l.match(/^(.*?)[\s,;\t]+(\S+)$/);
+    const date = m ? parseDate(m[2]) : null;
+    const name = (date ? m[1] : l).replace(/[,;\t]+$/,'').trim();
+    if(!name){ bad.push(l); continue; }
+    if(!date) bad.push(l);
+    rows.push({name, last:date});
+  }
+  const replace = $('importReplace').checked;
+  if(replace && !confirm('Mevcut liste ve geçmiş HERKES İÇİN silinip bununla değiştirilecek. Emin misiniz?')) return;
+  $('importBtn').disabled = true;
+  let ops = [];
+  if(replace){ ops = await deleteAllOps(); S.people = []; }
+  const r = upsertOps(rows);
+  const ok = await run([...ops, ...r.ops]);
+  $('importBtn').disabled = false;
+  if(!ok) return;
+  let t = `${r.added} kişi eklendi, ${r.updated} kişi güncellendi.`;
+  if(bad.length) t += `<br>Tarihi okunamayan ${bad.length} satır (tarihsiz eklendi): ${bad.slice(0,8).map(esc).join(' · ')}${bad.length>8?' …':''}`;
+  msg('importMsg', bad.length ? 'warn' : 'ok', t);
+  if(!bad.length) $('importText').value='';
+};
+
+/* ---------- eski yerel veriyi taşıma ---------- */
+const OLDKEY = 'camasir-takip-v1';
+function oldData(){ try{ const s = JSON.parse(localStorage.getItem(OLDKEY)); return s && Array.isArray(s.people) && s.people.length ? s : null; }catch(e){ return null; } }
+function checkMigrate(){
+  const d = oldData();
+  $('migrateCard').classList.toggle('hidden', !d);
+  if(d) $('migrateCount').textContent = d.people.length;
+}
+$('migrateBtn').onclick = async () => {
+  const d = oldData(); if(!d) return;
+  const r = upsertOps(d.people.map(p => ({name:p.name, last:p.last})));
+  if(await run(r.ops)){
+    try{ localStorage.removeItem(OLDKEY); }catch(e){}
+    msg('migrateMsg','ok',`${r.added} kişi eklendi, ${r.updated} kişi güncellendi.`);
+    setTimeout(checkMigrate, 2500);
+  }
+};
+$('migrateDismiss').onclick = () => { if(confirm('Bu cihazdaki eski liste silinsin mi? (Buluttaki veriye dokunulmaz.)')){ try{ localStorage.removeItem(OLDKEY); }catch(e){} checkMigrate(); } };
+
+/* ---------- ayarlar ---------- */
+function renderSettings(){ $('setLimit').value = S.settings.limit; $('setWarn').value = S.settings.warn; }
+$('saveSettings').onclick = async () => {
+  const l = +$('setLimit').value, w = +$('setWarn').value;
+  if(!(l>=1) || !(w>=0) || w>=l){ msg('setMsg','err','Uyarı günü, süre sınırından küçük olmalı.'); return; }
+  try{ await setDoc(doc(db,'meta','settings'), {limit:l, warn:w}); msg('setMsg','ok','Kaydedildi.'); }
+  catch(e){ msg('setMsg','err','Kaydedilemedi: '+e.message); }
+};
+
+/* ---------- yedek ---------- */
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text],{type}));
+  a.download = name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+$('exportJson').onclick = () => download(`camasir-yedek-${todayISO()}.json`,
+  JSON.stringify({people:S.people.map(p => ({name:p.name, last:p.last||null})), settings:S.settings}, null, 2), 'application/json');
+$('exportCsv').onclick = () => {
+  const rows = [['İsim','Son teslim','Geçen gün']].concat(S.people.slice().sort(byDays).map(p => {
+    const d = daysSince(p.last); return [p.name, fmt(p.last), d===Infinity?'':d];
+  }));
+  download(`camasir-${todayISO()}.csv`, '﻿'+rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(';')).join('\r\n'), 'text/csv');
+};
+$('importJson').onchange = async e => {
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  let d; try{ d = JSON.parse(await f.text()); if(!Array.isArray(d.people)) throw 0; }
+  catch(_){ msg('backupMsg','err','Geçersiz yedek dosyası.'); return; }
+  if(!confirm(`Yedekte ${d.people.length} kişi var. Buluttaki veri HERKES İÇİN bununla değiştirilsin mi?`)) return;
+  const ops = await deleteAllOps(); S.people = [];
+  const r = upsertOps(d.people.map(p => ({name:p.name, last:p.last})));
+  if(d.settings) ops.push({type:'set', ref:doc(db,'meta','settings'), data:Object.assign({limit:7,warn:5}, d.settings)});
+  if(await run([...ops, ...r.ops])) msg('backupMsg','ok','Yedek yüklendi.');
+};
+$('wipeAll').onclick = async () => {
+  if(confirm('TÜM veriler HERKES İÇİN silinecek. Emin misiniz?') && confirm('Son kez: geri alınamaz. Silinsin mi?')){
+    if(await run(await deleteAllOps())) msg('backupMsg','ok','Silindi.');
+  }
+};
+
+/* ---------- çiz ---------- */
+function renderAll(){ renderPanel(); renderList(); renderHistory(); }
+subscribe();
+checkMigrate();
+let lastDay = todayISO();
+setInterval(() => { if(todayISO()!==lastDay){ lastDay = todayISO(); $('batchDate').value = lastDay; renderAll(); } }, 60000);
+</script>
+</body>
+</html>
